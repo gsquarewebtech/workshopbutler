@@ -87,9 +87,22 @@ class Sidebar_Widget extends \WP_Widget {
 	 */
 	public function form( $instance ) {
 		foreach ( $this->fields as $name => $field ) {
-			switch ( $field->type ) {
+			switch ( $name  ) {
+
+				
+				case 'eventtype':
+				?>
+					<p>
+						<label for="<?php echo $this->get_field_id( $name ); ?>"><?php echo $field->description; ?></label>
+						<input class="widefat" id="<?php echo $this->get_field_id( $name ); ?>"
+							name="<?php echo $this->get_field_name( $name ); ?>"
+							type="<?php echo $this->get_field_name( $field->type ); ?>"
+							value="<?php echo esc_attr( isset( $instance[ $name ] ) ? $instance[ $name ] : $field->default_value ); ?>"/>
+					</p>
+				<?php
+				break;
 				default:
-					?>
+				?>
 					<p>
 						<label for="<?php echo $this->get_field_id( $name ); ?>"><?php echo $field->description; ?></label>
 						<input class="widefat" id="<?php echo $this->get_field_id( $name ); ?>"
@@ -150,6 +163,7 @@ class Sidebar_Widget extends \WP_Widget {
 		}
 		$this->fields['title']  = new Sidebar_Field( 'text', 'Title', '' );
 		$this->fields['length'] = new Sidebar_Field( 'number', 'Number of events', 3 );
+		$this->fields['eventtype'] = new Sidebar_Field( 'text', 'Event type 	(Exp: 002,221)', '' );
 	}
 
 	/**
@@ -162,14 +176,44 @@ class Sidebar_Widget extends \WP_Widget {
 	 */
 	public function render( $instance ) {
 		$method = 'events';
-		$fields = 'title,location,hashed_id,schedule,free,spoken_languages';
-		$query  = array(
+		$fields = 'type,title,location,hashed_id,schedule,free,spoken_languages';
+		
+		$multievent = explode(',',$instance['eventtype']);
+		
+		foreach($multievent as $mevent)
+		{
+
+			$query  = array(
 			'future' => true,
 			'public' => true,
+			'eventType'   => $mevent,
 			'fields' => $fields,
+			'length'=> $instance['length']
 		);
 
-		$response = $this->requests->get( $method, $query );
+			
+			$evettyperesult = $this->requests->get( $method, $query );
+
+			if($evettyperesult->is_error())
+			{
+
+				$response['error'] = $evettyperesult->error;
+
+			}
+			else
+			{
+				for($i=0;$i<count($evettyperesult->body);$i++)
+				{
+					$response[] = $evettyperesult->body[$i];
+				}	
+			}	
+			
+		
+		}	
+		
+
+
+		
 		return $this->render_list( $response, $instance );
 	}
 
@@ -183,16 +227,25 @@ class Sidebar_Widget extends \WP_Widget {
 	 * @return string
 	 */
 	private function render_list( $response, $instance ) {
-		if ( $response->is_error() ) {
+
+		if (isset($response['error'])) {
 			$html  = '<h2>' . __( 'Workshop Butler API: Request failed', 'wsbintegration' ) . '</h2>';
 			$html .= '<p>' . __( 'Reason : ', 'wsbintegration' ) . $response->error . '</p>';
 			return $html;
 		}
-
+		else
+		{	
 		$events = '<ul>';
-		$sliced = array_slice( $response->body, 0, $instance['length'] );
+
+		$sliced = array_slice( $response, 0, $instance['length'] );
+
+
+		
 		foreach ( $sliced as $json_event ) {
-			$event  = new Event(
+
+				
+
+				$event  = new Event(
 				$json_event,
 				$this->settings->get_event_page_url(),
 				$this->settings->get_trainer_page_url(),
@@ -210,6 +263,7 @@ class Sidebar_Widget extends \WP_Widget {
 		}
 		$events .= '</ul>';
 		return $events;
+		}
 	}
 
 	/**
